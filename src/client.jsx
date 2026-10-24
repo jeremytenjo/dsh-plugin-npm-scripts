@@ -1234,7 +1234,8 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
             aria-busy={state.phase === 'loading'}
             placeholder={t('searchPlaceholder')}
             value={state.query}
-            disabled={state.phase === 'loading' || state.phase === 'failed' || running}
+            readOnly={running}
+            aria-disabled={running}
             spellCheck={false}
             autoComplete="off"
             autoCorrect="off"
