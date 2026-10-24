@@ -1,6 +1,6 @@
 # npm scripts for DeepSeek Harness
 
-Press **Option+A** in any DeepSeek Harness session to open a searchable list of the active repository's `package.json` scripts. Pick one with the keyboard, and it starts in a new Harness terminal tab.
+Press **Option+A** in any DeepSeek Harness session to open a searchable list of the active repository's `package.json` scripts. Pick one with the keyboard, and it starts in a new Harness terminal tab. The shortcut is configurable from the plugin's own page.
 
 <p align="center">
   <picture>
@@ -46,6 +46,7 @@ The plugin is profile-wide: install it once and it is enabled by default in ever
 3. Type to filter the scripts.
 4. Use `↑` / `↓` to highlight a script and press `Enter`. The first result is selected automatically, so `Option+A`, `Enter` runs the first script.
 5. A new terminal tab opens, is renamed to the script name, and receives the command.
+6. To use a different key, open **Plugins → npm scripts → Keyboard shortcut** and record a new binding (see [Configuration](#configuration)).
 
 The command shown in the palette is what will be typed:
 
@@ -71,9 +72,18 @@ If no `package.json` exists, the palette shows an error with a retry action.
    - `package-lock.json` / `npm-shrinkwrap.json`
 3. `npm`.
 
-## Change the shortcut
+## Configuration
 
-Open **Plugins** in the sidebar and select **npm scripts**. The **Keyboard shortcut** section shows the current binding; select it, press the new combination, and release to save. **Esc** cancels recording, and **Reset to default** returns to Option+A on Desktop.
+| Setting | Where | Default |
+| --- | --- | --- |
+| Keyboard shortcut | **Plugins → npm scripts → Keyboard shortcut** | `Option+A` on macOS, `Alt+A` on Windows/Linux |
+
+Open **Plugins** in the sidebar and select **npm scripts**. Select the current binding (the keycaps with the pencil), press the new combination, and release to save.
+
+- **Esc** cancels recording.
+- **Reset to default** restores the default binding after a custom one has been saved.
+- Combinations already used by Harness or the operating system are rejected with a conflict/reserved message.
+- The binding is saved per device, in the same store as **Settings → Keyboard shortcuts**; it is not written into the repository. Editing the shortcut in either place updates the same preference.
 
 <p align="center">
   <picture>
@@ -82,7 +92,7 @@ Open **Plugins** in the sidebar and select **npm scripts**. The **Keyboard short
   </picture>
 </p>
 
-Bindings are stored per device in the same store as **Settings → Keyboard shortcuts**, so they follow the profile and survive reloads. On the Desktop app the binding is registered with the native keyboard service. On the Web, Option+A is a local fallback because browsers reject single-modifier Option bindings; saving a browser-supported combination replaces that fallback, and **Reset to default** brings Option+A back.
+On the Desktop app the binding is registered with the native keyboard service. On the Web, Option+A is a local fallback because browsers reject single-modifier Option bindings; saving a browser-supported combination replaces that fallback, and **Reset to default** brings Option+A back.
 
 ## Keyboard model
 
