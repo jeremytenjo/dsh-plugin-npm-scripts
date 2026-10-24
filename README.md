@@ -38,6 +38,8 @@ The package ships its browser bundle (`client.js`), so no build step is required
 
 ## Usage
 
+The plugin is profile-wide: install it once and it is enabled by default in every session. It adds nothing to individual projects and there is no per-project switch — a project only needs a `package.json`.
+
 1. Open a session whose working directory is inside a repository with a `package.json`.
 2. Press **Option+A** (`⌥A`).
 3. Type to filter the scripts.
