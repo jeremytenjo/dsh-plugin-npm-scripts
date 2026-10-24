@@ -13,6 +13,12 @@ import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 
 import { filterScripts, highlightParts } from './filter.js';
+import {
+  MODIFIER_ORDER,
+  bindingKeycaps,
+  isAltOptionA,
+  isOptionAFallbackEnabled,
+} from './shortcut.js';
 import { buildRunCommand } from './shell.js';
 
 const h = React.createElement;
@@ -23,6 +29,8 @@ const TAB_TIMEOUT_MS = 6000;
 const ATTACH_TIMEOUT_MS = 16000;
 const PROMPT_DELAY_MS = 160;
 const TOGGLE_GUARD_MS = 80;
+const COMMAND_ID = 'npm-scripts.open';
+const WEB_FALLBACK_BINDING = { code: 'KeyA', modifiers: ['alt'] };
 
 const EN = {
   title: 'Run npm script',
@@ -67,6 +75,30 @@ const EN = {
   allScriptOne: '1 script available.',
   running: 'Running',
   script: 'script',
+  shortcutTitle: 'Keyboard shortcut',
+  shortcutDescription: 'Open the npm scripts palette from any project. The binding is saved for this device.',
+  shortcutChange: 'Change keyboard shortcut',
+  shortcutRecording: 'Press a shortcut…',
+  shortcutRecordingHint: 'Release the keys to save, or press Esc to cancel.',
+  shortcutNotSet: 'Not set',
+  shortcutReset: 'Reset to default',
+  shortcutLoading: 'Loading shortcut…',
+  shortcutSaved: 'Shortcut saved.',
+  shortcutResetDone: 'Shortcut reset to the default.',
+  shortcutDefaultOptionA: 'Using the default Option+A.',
+  shortcutNativeFailed: 'Could not start key recording. Close other dialogs and try again.',
+  shortcutNotReady: 'Shortcuts are still loading. Try again in a moment.',
+  shortcutUnreadable: 'The shortcut settings could not be read.',
+  shortcutWriteFailed: 'The shortcut could not be saved.',
+  shortcutStale: 'Shortcuts changed elsewhere. Try again.',
+  shortcutConflict: 'Already used by {commands}.',
+  shortcutReserved: 'That combination is reserved by DeepSeek Harness or the operating system.',
+  shortcutUnsupportedBrowser: 'Web builds cannot use that combination. Add Command or Control.',
+  shortcutModifierRequired: 'Include at least one modifier besides Shift.',
+  shortcutUnsupportedKey: 'That key cannot be used for a shortcut.',
+  shortcutUnsupported: 'That shortcut is not available on this device.',
+  shortcutWebFallback: 'Option+A is the Web default. Choose a browser-supported combination, or reset to use it.',
+  shortcutRecordingStatus: 'Recording. {hint}',
 };
 
 const ZH = {
@@ -112,6 +144,30 @@ const ZH = {
   allScriptOne: '共 1 个脚本。',
   running: '正在运行',
   script: '脚本',
+  shortcutTitle: '键盘快捷键',
+  shortcutDescription: '在任意项目中打开 npm 脚本面板。此绑定仅保存在当前设备。',
+  shortcutChange: '更改键盘快捷键',
+  shortcutRecording: '按下快捷键…',
+  shortcutRecordingHint: '松开组合键即保存，按 Esc 取消。',
+  shortcutNotSet: '未设置',
+  shortcutReset: '恢复默认',
+  shortcutLoading: '正在读取快捷键…',
+  shortcutSaved: '快捷键已保存。',
+  shortcutResetDone: '快捷键已恢复默认。',
+  shortcutDefaultOptionA: '使用默认的 Option+A。',
+  shortcutNativeFailed: '无法开始录制按键。请关闭其他对话框后重试。',
+  shortcutNotReady: '快捷键仍在加载，请稍后再试。',
+  shortcutUnreadable: '无法读取快捷键设置。',
+  shortcutWriteFailed: '无法保存快捷键。',
+  shortcutStale: '快捷键已在其他位置更改，请重试。',
+  shortcutConflict: '已被 {commands} 使用。',
+  shortcutReserved: '该组合已被 DeepSeek Harness 或操作系统占用。',
+  shortcutUnsupportedBrowser: 'Web 版本无法使用该组合。请添加 Command 或 Control。',
+  shortcutModifierRequired: '除 Shift 外至少需要一个修饰键。',
+  shortcutUnsupportedKey: '该按键不能用于快捷键。',
+  shortcutUnsupported: '此设备无法使用该快捷键。',
+  shortcutWebFallback: 'Option+A 是 Web 的默认快捷键。请选择浏览器支持的组合，或恢复默认以使用它。',
+  shortcutRecordingStatus: '正在录制。{hint}',
 };
 
 const STYLES = `
@@ -539,6 +595,155 @@ const STYLES = `
 .dsnpm-running .dsnpm-spinner {
   width: 13px;
   height: 13px;
+}
+.dsnpm-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 1px 0 2px;
+}
+.dsnpm-settingsRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.dsnpm-settingsText {
+  min-width: 0;
+  flex: 1;
+}
+.dsnpm-settingsTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary, #16181d);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.dsnpm-settingsDesc {
+  margin: 4px 0 0;
+  max-width: 520px;
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  font-size: 12px;
+  line-height: 18px;
+}
+.dsnpm-settingsControls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+.dsnpm-binding {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 108px;
+  max-width: 280px;
+  height: 32px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4, rgba(127, 127, 127, 0.3));
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform, rgba(127, 127, 127, 0.1));
+  color: var(--dsw-alias-label-primary, #16181d);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease, box-shadow 100ms ease;
+}
+.dsnpm-binding:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.16));
+}
+.dsnpm-binding:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  outline-offset: 1px;
+}
+.dsnpm-binding:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.dsnpm-binding[data-recording="true"] {
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary, #4d6bfe);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+.dsnpm-binding[data-tone="error"] {
+  border-color: var(--dsw-alias-state-error-primary, #d33b3b);
+}
+.dsnpm-bindingReset {
+  margin: 0;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #606673);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dsnpm-bindingReset:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary, #16181d);
+}
+.dsnpm-bindingReset:focus-visible {
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary, #4d6bfe));
+  outline-offset: 2px;
+}
+.dsnpm-bindingReset:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.dsnpm-key {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(127, 127, 127, 0.26));
+  border-radius: 5px;
+  background: var(--dsw-alias-bg-layer-2, rgba(127, 127, 127, 0.1));
+  color: var(--dsw-alias-label-primary, #16181d);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+}
+.dsnpm-bindingEdit {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  flex: none;
+}
+.dsnpm-binding:hover .dsnpm-bindingEdit {
+  color: var(--dsw-alias-label-secondary, #606673);
+}
+.dsnpm-settingsStatus {
+  margin: 0;
+  min-height: 18px;
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.dsnpm-settingsStatus[data-tone="error"] {
+  color: var(--dsw-alias-state-error-primary, #d33b3b);
+}
+.dsnpm-settingsStatus[data-tone="success"] {
+  color: var(--dsw-alias-state-success-secondary, #2f9e44);
+}
+.dsnpm-recordingDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  animation: dsnpm-pulse 1s ease-in-out infinite;
 }
 .dsnpm-srOnly {
   position: absolute;
@@ -982,6 +1187,400 @@ function errorCopy(t, error) {
   if (code === 'terminal-unavailable') return t('terminalUnavailable');
   if (code === 'terminal-timeout') return t('terminalTimeout');
   return error?.message || t('requestFailed');
+}
+
+function issueText(t, issue) {
+  if (issue === 'reserved') return t('shortcutReserved');
+  if (issue === 'unsupported-browser') return t('shortcutUnsupportedBrowser');
+  if (issue === 'modifier-required') return t('shortcutModifierRequired');
+  if (issue === 'unsupported-key') return t('shortcutUnsupportedKey');
+  return t('shortcutUnsupported');
+}
+
+/**
+ * Whether the local Option+A listener should still run. Web builds cannot
+ * register an Alt-only binding through the shortcut service, so the default
+ * is handled here until the user saves a different combination.
+ */
+function optionAFallbackEnabled(ctx) {
+  const row = ctx.shortcuts.catalog.getSnapshot().find((entry) => entry.id === COMMAND_ID);
+  return isOptionAFallbackEnabled(row);
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      className="dsnpm-bindingEdit"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+      <path d="m14.5 6.5 3 3" />
+    </svg>
+  );
+}
+
+function KeyCaps({ keys, soft = false }) {
+  if (!keys || keys.length === 0) return null;
+  return (
+    <>
+      {keys.map((key, index) => (
+        <kbd key={`${key}-${index}`} className="dsnpm-key" data-soft={soft ? 'true' : undefined}>
+          {key}
+        </kbd>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Bundle configuration page: shows and records the shortcut for the palette.
+ * The recorder uses the shortcut service's own persistence and validation, so
+ * overrides stay in the same device-local store as Settings → Keyboard shortcuts.
+ */
+function ShortcutSettings({ ctx, setIntercept }) {
+  const t = useTranslate(ctx);
+  const catalog = React.useSyncExternalStore(
+    ctx.shortcuts.catalog.subscribe,
+    ctx.shortcuts.catalog.getSnapshot,
+    ctx.shortcuts.catalog.getSnapshot,
+  );
+  const config = React.useSyncExternalStore(
+    ctx.shortcuts.config.subscribe,
+    ctx.shortcuts.config.getSnapshot,
+    ctx.shortcuts.config.getSnapshot,
+  );
+  const platform = ctx.shortcuts.platform;
+  const [recording, setRecording] = React.useState(false);
+  const [candidate, setCandidate] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const buttonRef = React.useRef(null);
+  const mounted = React.useRef(true);
+  const saveRef = React.useRef(() => {});
+
+  const row = catalog.find((entry) => entry.id === COMMAND_ID);
+  const fallbackActive =
+    ctx.shortcuts.runtime !== 'desktop' && (!row || (!row.modified && row.binding === null));
+  const shownBinding = recording
+    ? candidate
+    : fallbackActive
+      ? WEB_FALLBACK_BINDING
+      : row?.binding ?? null;
+  const keys = bindingKeycaps(shownBinding, platform);
+  const configReady = config.status === 'ready';
+  const canEdit = configReady && Boolean(row) && !busy;
+
+  React.useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
+
+  function conflictLabels(ids) {
+    const fixed = ctx.shortcuts.fixedCatalog.getSnapshot();
+    return (ids ?? [])
+      .filter((id) => id !== COMMAND_ID)
+      .map((id) => {
+        const live = catalog.find((entry) => entry.id === id);
+        if (live?.label) return live.label;
+        const pinned = fixed.find((entry) => entry.id === id);
+        if (pinned?.label) return pinned.label;
+        return id;
+      });
+  }
+
+  function reportResult(result, successKey) {
+    if (result.status === 'saved') {
+      setStatus({ tone: 'success', text: t(successKey) });
+      return;
+    }
+    if (result.status === 'conflict') {
+      const conflicts = conflictLabels(result.conflicts);
+      setStatus({
+        tone: 'error',
+        text:
+          result.issue
+            ? issueText(t, result.issue)
+            : conflicts.length > 0
+              ? t('shortcutConflict', { commands: conflicts.join(', ') })
+              : t('shortcutUnsupported'),
+      });
+      return;
+    }
+    if (result.status === 'stale') setStatus({ tone: 'error', text: t('shortcutStale') });
+    else if (result.status === 'not-ready') setStatus({ tone: 'error', text: t('shortcutNotReady') });
+    else if (result.status === 'unreadable') setStatus({ tone: 'error', text: t('shortcutUnreadable') });
+    else setStatus({ tone: 'error', text: t('shortcutWriteFailed') });
+  }
+
+  async function resetShortcut() {
+    if (!canEdit) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const snapshot = ctx.shortcuts.config.getSnapshot();
+      if (snapshot.status !== 'ready') {
+        setStatus({ tone: 'error', text: t('shortcutNotReady') });
+        return;
+      }
+      const result = await ctx.shortcuts.edit({ type: 'reset', id: COMMAND_ID }, snapshot.revision);
+      reportResult(result, 'shortcutResetDone');
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  async function saveBinding(binding) {
+    if (!mounted.current) return;
+    setBusy(true);
+    setCandidate(null);
+    try {
+      const current = ctx.shortcuts.catalog.getSnapshot().find((entry) => entry.id === COMMAND_ID);
+      if (isAltOptionA(binding) && ctx.shortcuts.runtime !== 'desktop') {
+        // Option+A is the local Web fallback; reset any custom override so it
+        // becomes effective again, or keep the untouched default.
+        if (current?.modified) {
+          const snapshot = ctx.shortcuts.config.getSnapshot();
+          if (snapshot.status !== 'ready') {
+            setStatus({ tone: 'error', text: t('shortcutNotReady') });
+            return;
+          }
+          const result = await ctx.shortcuts.edit(
+            { type: 'reset', id: COMMAND_ID },
+            snapshot.revision,
+          );
+          if (result.status === 'saved') {
+            setStatus({ tone: 'success', text: t('shortcutDefaultOptionA') });
+          } else {
+            reportResult(result, 'shortcutDefaultOptionA');
+          }
+          return;
+        }
+        setStatus({ tone: 'success', text: t('shortcutDefaultOptionA') });
+        return;
+      }
+
+      let described;
+      try {
+        described = ctx.shortcuts.describeBinding(binding);
+      } catch {
+        setStatus({ tone: 'error', text: t('shortcutUnsupportedKey') });
+        return;
+      }
+      if (described.issue) {
+        setStatus({ tone: 'error', text: issueText(t, described.issue) });
+        return;
+      }
+      const conflicts = conflictLabels(described.conflicts);
+      if (conflicts.length > 0) {
+        setStatus({
+          tone: 'error',
+          text: t('shortcutConflict', { commands: conflicts.join(', ') }),
+        });
+        return;
+      }
+      const snapshot = ctx.shortcuts.config.getSnapshot();
+      if (snapshot.status !== 'ready') {
+        setStatus({ tone: 'error', text: t('shortcutNotReady') });
+        return;
+      }
+      const result = await ctx.shortcuts.edit(
+        { type: 'set', id: COMMAND_ID, binding: described.binding },
+        snapshot.revision,
+      );
+      reportResult(result, 'shortcutSaved');
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  saveRef.current = saveBinding;
+
+  React.useEffect(() => {
+    if (!recording) return undefined;
+    let disposed = false;
+    let pending = null;
+    setIntercept(true);
+    setCandidate(null);
+    setStatus(null);
+
+    ctx.shortcuts.recording(true).catch(() => {
+      if (disposed) return;
+      setStatus({ tone: 'error', text: t('shortcutNativeFailed') });
+      setRecording(false);
+    });
+
+    const notModifier = (code) => !/^(Control|Alt|Shift|Meta)(Left|Right)$/u.test(code);
+    const onDown = (event) => {
+      if (disposed) return;
+      if (event.isComposing || event.getModifierState?.('AltGraph')) return;
+      if (
+        event.key === 'Escape' &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        setStatus(null);
+        setRecording(false);
+        return;
+      }
+      if (event.key === 'Tab') {
+        setRecording(false);
+        return;
+      }
+      if (!notModifier(event.code)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+      if (event.repeat || pending !== null) return;
+      if (event.code === 'Escape') return;
+      const modifiers = MODIFIER_ORDER.filter(
+        (modifier) =>
+          ({ control: event.ctrlKey, alt: event.altKey, shift: event.shiftKey, meta: event.metaKey })[
+            modifier
+          ],
+      );
+      pending = { code: event.code, modifiers };
+      setCandidate(pending);
+      setStatus(null);
+    };
+    const onUp = (event) => {
+      if (disposed || pending === null || event.code !== pending.code) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+      const binding = pending;
+      pending = null;
+      setRecording(false);
+      void saveRef.current(binding);
+    };
+    const onBlur = () => {
+      if (!disposed) setRecording(false);
+    };
+    const onFocusIn = (event) => {
+      if (
+        buttonRef.current &&
+        event.target !== buttonRef.current &&
+        !buttonRef.current.contains(event.target)
+      ) {
+        setRecording(false);
+      }
+    };
+    document.addEventListener('keydown', onDown, true);
+    document.addEventListener('keyup', onUp, true);
+    document.addEventListener('focusin', onFocusIn, true);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      disposed = true;
+      setIntercept(false);
+      setCandidate(null);
+      document.removeEventListener('keydown', onDown, true);
+      document.removeEventListener('keyup', onUp, true);
+      document.removeEventListener('focusin', onFocusIn, true);
+      window.removeEventListener('blur', onBlur);
+      void ctx.shortcuts.recording(false).catch(() => {});
+    };
+    // The recorder only restarts when recording starts or stops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording]);
+
+  function toggleRecording() {
+    if (!canEdit && !recording) return;
+    if (recording) {
+      setRecording(false);
+      return;
+    }
+    setStatus(null);
+    setCandidate(null);
+    setRecording(true);
+    buttonRef.current?.focus();
+  }
+
+  let statusText = '';
+  let statusTone = '';
+  if (status) {
+    statusText = status.text;
+    statusTone = status.tone;
+  } else if (recording) {
+    statusText = t('shortcutRecordingHint');
+  } else if (config.status === 'loading') {
+    statusText = t('shortcutLoading');
+  } else if (config.status === 'unreadable') {
+    statusText = t('shortcutUnreadable');
+    statusTone = 'error';
+  } else if (fallbackActive) {
+    statusText = t('shortcutWebFallback');
+  }
+
+  return (
+    <div className="dsnpm-settings">
+      <div className="dsnpm-settingsRow">
+        <div className="dsnpm-settingsText">
+          <h3 className="dsnpm-settingsTitle">{t('shortcutTitle')}</h3>
+          <p className="dsnpm-settingsDesc">{t('shortcutDescription')}</p>
+        </div>
+        <div className="dsnpm-settingsControls">
+          <button
+            ref={buttonRef}
+            type="button"
+            className="dsnpm-binding"
+            data-recording={recording ? 'true' : undefined}
+            data-tone={statusTone === 'error' ? 'error' : undefined}
+            onClick={toggleRecording}
+            disabled={busy || !row || (!configReady && !recording)}
+            aria-pressed={recording}
+            aria-label={
+              recording
+                ? t('shortcutRecording')
+                : keys.length > 0
+                  ? `${t('shortcutChange')}: ${keys.join(' ')}`
+                  : t('shortcutChange')
+            }
+            title={t('shortcutChange')}
+          >
+            {recording && !candidate ? (
+              <>
+                <span className="dsnpm-recordingDot" aria-hidden="true" />
+                {t('shortcutRecording')}
+              </>
+            ) : keys.length > 0 ? (
+              <>
+                <KeyCaps keys={keys} />
+                <PencilIcon />
+              </>
+            ) : (
+              t('shortcutNotSet')
+            )}
+          </button>
+          {row?.modified ? (
+            <button
+              type="button"
+              className="dsnpm-bindingReset"
+              onClick={() => void resetShortcut()}
+              disabled={busy || recording || !configReady}
+            >
+              {t('shortcutReset')}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <p className="dsnpm-settingsStatus" data-tone={statusTone || undefined} role="status">
+        {statusText}
+      </p>
+    </div>
+  );
 }
 
 function RunIcon() {
@@ -1442,10 +2041,22 @@ function removeStyles() {
   document.querySelector('style[data-dsh-npm-scripts]')?.remove();
 }
 
-export const inject = ['sessions', 'layout', 'shortcuts', 'locale', 'sidebarRight', 'webTerminals'];
+export const inject = [
+  'sessions',
+  'layout',
+  'shortcuts',
+  'locale',
+  'slots',
+  'sidebarRight',
+  'webTerminals',
+];
 
 export function apply(ctx) {
   const controller = createController(ctx);
+  let interceptShortcut = false;
+  const setIntercept = (value) => {
+    interceptShortcut = Boolean(value);
+  };
   ensureStyles();
 
   const rootElement = document.createElement('div');
@@ -1465,6 +2076,21 @@ export function apply(ctx) {
 
   ctx.effect(() => ctx.locale.register(NS, 'en', EN), 'npm-scripts: en locale');
   ctx.effect(() => ctx.locale.register(NS, 'zh', ZH), 'npm-scripts: zh locale');
+
+  ctx.effect(
+    () =>
+      ctx.slots.inject('plugins.bundle.config', () =>
+        ctx.slots.register(
+          {
+            name: 'plugins.bundle.config',
+            key: 'dsh-plugin-npm-scripts',
+            locale: NS,
+          },
+          (props) => h(ShortcutSettings, { ...props, ctx, setIntercept }),
+        ),
+      ),
+    'npm-scripts: settings',
+  );
 
   ctx.effect(() => {
     const t = ctx.locale.bind(NS);
@@ -1486,13 +2112,14 @@ export function apply(ctx) {
       : {};
     try {
       return ctx.shortcuts.register({
-        id: 'npm-scripts.open',
+        id: COMMAND_ID,
         label: () => translate('shortcutLabel'),
         aliases: ['npm scripts', 'run npm script', 'package scripts', 'run script'],
         defaults,
         regions: ['page', 'editable', 'terminal'],
         modals: [MODAL_NAME],
         resolve: () => {
+          if (interceptShortcut) return { status: 'blocked', reason: 'recording' };
           const sessionId = activeSessionId(ctx);
           if (!sessionId) {
             return { status: 'blocked', reason: translate('noSession') };
@@ -1516,9 +2143,11 @@ export function apply(ctx) {
   ctx.effect(() => {
     const onKeyDown = (event) => {
       if (event.defaultPrevented || event.isComposing || event.repeat) return;
+      if (interceptShortcut) return;
       if (event.code !== 'KeyA' || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) {
         return;
       }
+      if (!optionAFallbackEnabled(ctx)) return;
       const target = event.target;
       if (target instanceof Element && target.closest('[role="menu"]')) return;
       if (controller.getState().open) {

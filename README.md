@@ -12,6 +12,7 @@ Press **Option+A** in any DeepSeek Harness session to open a searchable list of 
 ## Features
 
 - **Option+A from anywhere** in the session — composer, page, or terminal.
+- **Configurable shortcut** in the plugin's own **Plugins** page, using the same device-local bindings as **Settings → Keyboard shortcuts**.
 - **Search filter** over script names and commands, case-insensitive and ranked so exact and prefix matches come first.
 - **Keyboard first**: `↑` / `↓` navigate, `Home` / `End` jump, `PageUp` / `PageDown` move a page, `Enter` runs, `Esc` closes. The search field uses the ARIA combobox + listbox pattern, so screen readers announce the active script.
 - **Runs in a real Harness terminal**: opens a new terminal tab in the right sidebar, waits for the shell to attach, then types the selected command.
@@ -23,7 +24,7 @@ Press **Option+A** in any DeepSeek Harness session to open a searchable list of 
 
 ## Install
 
-In the desktop app, open **Settings → Plugins**, choose **Add plugin**, and enter the local directory path. The desktop profile is managed by the Electron app, which is why this is the preferred path there.
+In the desktop app, open **Plugins** in the sidebar, choose **Add plugin**, and enter the local directory path. The desktop profile is managed by the Electron app, which is why this is the preferred path there.
 
 For another profile, use the CLI:
 
@@ -70,11 +71,24 @@ If no `package.json` exists, the palette shows an error with a retry action.
    - `package-lock.json` / `npm-shrinkwrap.json`
 3. `npm`.
 
+## Change the shortcut
+
+Open **Plugins** in the sidebar and select **npm scripts**. The **Keyboard shortcut** section shows the current binding; select it, press the new combination, and release to save. **Esc** cancels recording, and **Reset to default** returns to Option+A on Desktop.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/npm-scripts-settings-dark.png" />
+    <img src="docs/npm-scripts-settings-light.png" width="760" alt="The npm scripts plugin page in DeepSeek Harness with a Keyboard shortcut section and an editable Option+A binding" />
+  </picture>
+</p>
+
+Bindings are stored per device in the same store as **Settings → Keyboard shortcuts**, so they follow the profile and survive reloads. On the Desktop app the binding is registered with the native keyboard service. On the Web, Option+A is a local fallback because browsers reject single-modifier Option bindings; saving a browser-supported combination replaces that fallback, and **Reset to default** brings Option+A back.
+
 ## Keyboard model
 
 | Key | Action |
 | --- | --- |
-| `Option+A` | Open the palette; press again to close |
+| `Option+A` (default) | Open the palette; press again to close. Change it on the plugin page. |
 | `↑` / `↓` | Move the highlight |
 | `Home` / `End` | First / last script |
 | `PageUp` / `PageDown` | Move six rows |
@@ -82,10 +96,11 @@ If no `package.json` exists, the palette shows an error with a retry action.
 | `Esc` | Close the palette |
 | `Tab` / `Shift+Tab` | Cycle focus between search and close |
 
-While the palette is open, Harness's modal layer blocks background shortcuts. On the desktop app the binding is registered as **⌥A** and appears in **Settings → Keyboard shortcuts**; in the Web app where browsers reject single-modifier `Option` bindings, the palette listens locally for Option+A instead.
+While the palette is open, Harness's modal layer blocks background shortcuts. The effective binding appears in both **Settings → Keyboard shortcuts** and the plugin page; editing either place updates the same preference. In the Web app, Option+A remains a local fallback until you save a browser-supported combination.
 
 ## How it works
 
+- The browser half registers a `plugins.bundle.config` page for `dsh-plugin-npm-scripts`. It records one physical key combination, validates it with the shortcut service (`describeBinding`), and persists it through `ctx.shortcuts.edit`.
 - The Host half registers one exact loopback route, `POST /__dsh/npm-scripts`.
 - The browser sends the active Session id. The Host resolves that Session's working directory itself, runs `git rev-parse --show-toplevel`, walks to the nearest `package.json`, parses it, and returns the scripts plus the detected package manager.
 - The browser half builds a quoted command and asks the right sidebar to open a `terminal` tab.
