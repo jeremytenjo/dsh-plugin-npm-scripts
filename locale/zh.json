@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "npm 脚本",
+    "description": "按 Option+A 搜索当前仓库 package.json 中的脚本，并在新终端中运行。"
+  }
+}

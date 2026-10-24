@@ -1,0 +1,63 @@
+{
+  "name": "dsh-plugin-npm-scripts",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Press Option+A in DeepSeek Harness to search your repository's npm scripts and run one in a new terminal.",
+  "license": "MIT",
+  "author": "Jeremy Tenjo",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "npm",
+    "scripts",
+    "terminal",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremytenjo/dsh-plugin-npm-scripts.git"
+  },
+  "homepage": "https://github.com/jeremytenjo/dsh-plugin-npm-scripts#readme",
+  "bugs": {
+    "url": "https://github.com/jeremytenjo/dsh-plugin-npm-scripts/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-terminal-controller",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-sidebar-terminal"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

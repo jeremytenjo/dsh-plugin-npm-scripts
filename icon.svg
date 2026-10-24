@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Terminal window running a script">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16204A"/>
+      <stop offset="1" stop-color="#090D1B"/>
+    </linearGradient>
+    <linearGradient id="window" x1="14" y1="15" x2="50" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A8B8FF"/>
+      <stop offset="1" stop-color="#4D6BFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <rect x="11.5" y="15.5" width="41" height="33" rx="8" fill="#0B1226" stroke="url(#window)" stroke-width="2.4"/>
+  <path d="M11.5 24h41" stroke="url(#window)" stroke-width="2.2"/>
+  <circle cx="17.6" cy="20" r="1.6" fill="#F87171"/>
+  <circle cx="23" cy="20" r="1.6" fill="#FBBF24"/>
+  <circle cx="28.4" cy="20" r="1.6" fill="#34D399"/>
+  <path d="m18.6 31 4.8 4-4.8 4" fill="none" stroke="#E6EBFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27.5 39h9.5" stroke="#4D6BFE" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M39 29.5h6M39 34h4.2" stroke="#8FA2E8" stroke-width="1.7" stroke-linecap="round" opacity="0.9"/>
+  <path d="m47.2 12.3.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4Z" fill="#FBBF24"/>
+</svg>

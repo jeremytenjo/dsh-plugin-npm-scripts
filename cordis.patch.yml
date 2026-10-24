@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-plugin-npm-scripts
+      name: 'dsh-plugin-npm-scripts'
