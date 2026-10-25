@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
-  "description": "Press Option+A in DeepSeek Harness to search your repository's npm scripts and run one in a new terminal.",
+  "description": "Press Option+A in DeepSeek Harness to search your repository's npm scripts, run one in a terminal, or restart it in its existing tab.",
   "license": "MIT",
   "author": "Jeremy Tenjo",
   "keywords": [

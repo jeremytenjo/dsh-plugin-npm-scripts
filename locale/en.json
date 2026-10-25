@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "npm scripts",
-    "description": "Press Option+A to search the active repository's package.json scripts and run one in a new terminal."
+    "description": "Press Option+A to search the active repository's package.json scripts, run one in a new terminal, and restart a running script in its existing tab."
   }
 }

@@ -14,6 +14,13 @@ import { createRoot } from 'react-dom/client';
 
 import { filterScripts, highlightParts } from './filter.js';
 import {
+  findLaunch,
+  readLaunches,
+  removeLaunch,
+  upsertLaunch,
+  writeLaunches,
+} from './launches.js';
+import {
   MODIFIER_ORDER,
   bindingKeycaps,
   isAltOptionA,
@@ -29,6 +36,11 @@ const TAB_TIMEOUT_MS = 6000;
 const ATTACH_TIMEOUT_MS = 16000;
 const PROMPT_DELAY_MS = 160;
 const TOGGLE_GUARD_MS = 80;
+const INTERRUPT_SETTLE_MS = 320;
+const INTERRUPT_REPEAT_MS = 140;
+const INTERRUPT_QUIET_MS = 120;
+const INTERRUPT_TIMEOUT_MS = 2400;
+const RESTART_CHECK_TIMEOUT_MS = 5000;
 const COMMAND_ID = 'npm-scripts.open';
 const WEB_FALLBACK_BINDING = { code: 'KeyA', modifiers: ['alt'] };
 
@@ -75,6 +87,17 @@ const EN = {
   allScriptOne: '1 script available.',
   running: 'Running',
   script: 'script',
+  checking: 'Checking “{name}”…',
+  restartTitle: 'Restart script?',
+  restartLead: '“{name}” is still open in a terminal tab.',
+  restartDetail:
+    'Restarting stops the current process with Ctrl+C and runs the script again in the same terminal tab.',
+  restartConfirm: 'Restart script',
+  restartCancel: 'Cancel',
+  restarting: 'Restarting “{name}”…',
+  restartHint: 'Enter to restart',
+  restartErrorTitle: 'Could not restart the script',
+  restartUnavailable: 'The terminal tab for this script is no longer available.',
   shortcutTitle: 'Keyboard shortcut',
   shortcutDescription: 'Open the npm scripts palette from any project. The binding is saved for this device.',
   shortcutChange: 'Change keyboard shortcut',
@@ -144,6 +167,16 @@ const ZH = {
   allScriptOne: '共 1 个脚本。',
   running: '正在运行',
   script: '脚本',
+  checking: '正在检查“{name}”…',
+  restartTitle: '重新启动脚本？',
+  restartLead: '“{name}”仍在终端标签页中打开。',
+  restartDetail: '重新启动会用 Ctrl+C 停止当前进程，并在同一终端标签页中再次运行该脚本。',
+  restartConfirm: '重新启动脚本',
+  restartCancel: '取消',
+  restarting: '正在重新启动“{name}”…',
+  restartHint: '回车重新启动',
+  restartErrorTitle: '无法重新启动脚本',
+  restartUnavailable: '此脚本的终端标签页已不可用。',
   shortcutTitle: '键盘快捷键',
   shortcutDescription: '在任意项目中打开 npm 脚本面板。此绑定仅保存在当前设备。',
   shortcutChange: '更改键盘快捷键',
@@ -596,6 +629,107 @@ const STYLES = `
   width: 13px;
   height: 13px;
 }
+.dsnpm-confirm {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 13px;
+  min-height: 190px;
+  padding: 22px 20px 20px;
+  animation: dsnpm-fade 120ms ease-out;
+}
+.dsnpm-confirmGlyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 1px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2, rgba(127, 127, 127, 0.1));
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+.dsnpm-confirmGlyph svg {
+  width: 18px;
+  height: 18px;
+}
+.dsnpm-confirmBody {
+  min-width: 0;
+  flex: 1;
+}
+.dsnpm-confirmLead {
+  margin: 0;
+  color: var(--dsw-alias-label-primary, #16181d);
+  font-size: 13.5px;
+  font-weight: 550;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.dsnpm-confirmDetail {
+  margin: 5px 0 0;
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.dsnpm-confirmCommand {
+  display: block;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(127, 127, 127, 0.24));
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2, rgba(127, 127, 127, 0.08));
+  color: var(--dsw-alias-label-secondary, #6b7280);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.dsnpm-confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.dsnpm-confirmButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  margin: 0;
+  padding: 0 13px;
+  border: 0.5px solid var(--dsw-alias-border-l4, rgba(127, 127, 127, 0.3));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #16181d);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.dsnpm-confirmButton:hover {
+  background: var(--dsw-alias-bg-layer-2, rgba(127, 127, 127, 0.1));
+}
+.dsnpm-confirmButton[data-variant="primary"] {
+  border-color: transparent;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  color: #ffffff;
+}
+.dsnpm-confirmButton[data-variant="primary"]:hover {
+  background: var(--dsw-alias-brand-primary-hover, #3f5ae0);
+}
+.dsnpm-confirmButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  outline-offset: 1px;
+}
+.dsnpm-confirmButton[data-variant="primary"]:focus-visible {
+  outline-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  outline-offset: 2px;
+}
 .dsnpm-settings {
   display: flex;
   flex-direction: column;
@@ -866,6 +1000,13 @@ function hasForeignModal() {
  * @returns controller with stable subscribe/getState methods.
  */
 function createController(ctx) {
+  let storage;
+  try {
+    storage = typeof localStorage === 'undefined' ? undefined : localStorage;
+  } catch {
+    storage = undefined;
+  }
+  let launches = readLaunches(storage);
   let state = {
     open: false,
     sessionId: undefined,
@@ -874,6 +1015,7 @@ function createController(ctx) {
     error: null,
     query: '',
     running: null,
+    confirming: null,
   };
   let request;
   let requestId = 0;
@@ -892,6 +1034,85 @@ function createController(ctx) {
       request = undefined;
     }
     requestId += 1;
+  }
+
+  function commandFor(repo, script) {
+    return buildRunCommand({
+      manager: repo.manager,
+      scriptName: script.name,
+      packageDir: repo.packageDir,
+      cwd: repo.cwd,
+      platform: ctx.shortcuts.platform,
+    });
+  }
+
+  function rememberLaunch(entry) {
+    // Merge with the latest snapshot so another Harness window keeps its records.
+    launches = upsertLaunch(readLaunches(storage), entry);
+    writeLaunches(storage, launches);
+  }
+
+  function forgetLaunch(query) {
+    launches = removeLaunch(readLaunches(storage), query);
+    writeLaunches(storage, launches);
+  }
+
+  /**
+   * Resolve the tab this plugin last opened for the script, if its shell is
+   * still running. A dead tab is forgotten so the script starts in a fresh tab
+   * instead of asking to restart nothing.
+   */
+  async function existingTerminal(sessionId, repo, script) {
+    const query = { sessionId, packageDir: repo.packageDir, scriptName: script.name };
+    let launch = findLaunch(launches, query);
+    if (!launch) {
+      launches = readLaunches(storage);
+      launch = findLaunch(launches, query);
+    }
+    if (!launch) return undefined;
+    const tabs = ctx.sidebarRight?.openTabs?.getSnapshot?.();
+    const tab = Array.isArray(tabs)
+      ? tabs.find(
+          (entry) =>
+            entry.sessionId === sessionId &&
+            entry.kind === 'terminal' &&
+            entry.contentId === launch.contentId,
+        )
+      : undefined;
+    if (!tab || !ctx.webTerminals || typeof ctx.webTerminals.view !== 'function') {
+      // The tab may belong to another Harness window; its record stays usable there.
+      return undefined;
+    }
+
+    let view;
+    try {
+      view = ctx.webTerminals.view(sessionId, tab.tabId, tab.contentId, launch.terminalId);
+      const initial = view.state.getSnapshot();
+      if (!initial.info && (initial.phase === 'idle' || initial.phase === 'loading')) {
+        await withTimeout(view.refresh(), RESTART_CHECK_TIMEOUT_MS);
+      }
+    } catch {
+      const failed = view?.state.getSnapshot();
+      if (
+        failed?.issue === 'missingTerminal' ||
+        failed?.phase === 'failed' ||
+        failed?.phase === 'closed'
+      ) {
+        forgetLaunch(query);
+      }
+      return undefined;
+    }
+    const snapshot = view.state.getSnapshot();
+    if (
+      !snapshot.info ||
+      snapshot.info.state !== 'running' ||
+      snapshot.phase === 'failed' ||
+      snapshot.phase === 'closed'
+    ) {
+      forgetLaunch(query);
+      return undefined;
+    }
+    return { ...launch, tabId: tab.tabId, contentId: tab.contentId, view };
   }
 
   const controller = {
@@ -918,13 +1139,24 @@ function createController(ctx) {
         error: null,
         query: '',
         running: null,
+        confirming: null,
       });
       void loadScripts(sessionId, abort.signal, id);
     },
     close() {
       if (!state.open && state.phase === 'idle') return;
+      // Abandon any launch or restart that is still settling.
+      launched += 1;
       disconnect();
-      set({ open: false, phase: 'idle', repo: null, error: null, query: '', running: null });
+      set({
+        open: false,
+        phase: 'idle',
+        repo: null,
+        error: null,
+        query: '',
+        running: null,
+        confirming: null,
+      });
     },
     toggle(sessionId) {
       const now = Date.now();
@@ -944,7 +1176,14 @@ function createController(ctx) {
       const id = requestId;
       const abort = new AbortController();
       request = abort;
-      set({ phase: 'loading', repo: null, error: null, query: '', running: null });
+      set({
+        phase: 'loading',
+        repo: null,
+        error: null,
+        query: '',
+        running: null,
+        confirming: null,
+      });
       void loadScripts(sessionId, abort.signal, id);
     },
     async run(script) {
@@ -953,23 +1192,107 @@ function createController(ctx) {
       const sessionId = state.sessionId;
       const token = launched + 1;
       launched = token;
-      set({ running: { name: script.name }, error: null });
+      let command;
       try {
-        const command = buildRunCommand({
-          manager: repo.manager,
-          scriptName: script.name,
-          packageDir: repo.packageDir,
-          cwd: repo.cwd,
-          platform: ctx.shortcuts.platform,
+        command = commandFor(repo, script);
+      } catch (error) {
+        set({
+          error: {
+            code: 'terminal-failed',
+            message: error instanceof Error ? error.message : String(error),
+          },
         });
-        await launchTerminal(ctx, sessionId, command, script.name);
+        return;
+      }
+
+      set({ running: { name: script.name, mode: 'check' }, confirming: null, error: null });
+      let target;
+      try {
+        target = await existingTerminal(sessionId, repo, script);
+      } catch {
+        target = undefined;
+      }
+      if (launched !== token) return;
+      if (target) {
+        set({ running: null, confirming: { script, command, target } });
+        return;
+      }
+
+      set({ running: { name: script.name, mode: 'launch' } });
+      try {
+        const openedTab = await launchTerminal(ctx, sessionId, command, script.name);
         if (launched !== token) return;
-        set({ open: false, phase: 'idle', repo: null, query: '', running: null });
+        rememberLaunch({
+          sessionId,
+          packageDir: repo.packageDir,
+          scriptName: script.name,
+          title: script.name,
+          ...openedTab,
+          launchedAt: Date.now(),
+        });
+        set({
+          open: false,
+          phase: 'idle',
+          repo: null,
+          query: '',
+          running: null,
+          confirming: null,
+        });
       } catch (error) {
         if (launched !== token) return;
         set({
           running: null,
-          error: { code: 'terminal-failed', message: error instanceof Error ? error.message : String(error) },
+          confirming: null,
+          error: {
+            code: 'terminal-failed',
+            message: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+    },
+    cancelRestart() {
+      if (!state.confirming || state.running) return;
+      set({ confirming: null });
+    },
+    async acceptRestart() {
+      const confirming = state.confirming;
+      if (!confirming || state.running) return;
+      const token = launched + 1;
+      launched = token;
+      set({
+        running: { name: confirming.script.name, mode: 'restart' },
+        confirming: null,
+        error: null,
+      });
+      try {
+        await restartTerminal(ctx, confirming.target, confirming.command);
+        if (launched !== token) return;
+        rememberLaunch({
+          sessionId: confirming.target.sessionId,
+          packageDir: confirming.target.packageDir,
+          scriptName: confirming.script.name,
+          title: confirming.script.name,
+          tabId: confirming.target.tabId,
+          contentId: confirming.target.contentId,
+          terminalId: confirming.target.terminalId,
+          launchedAt: Date.now(),
+        });
+        set({
+          open: false,
+          phase: 'idle',
+          repo: null,
+          query: '',
+          running: null,
+          confirming: null,
+        });
+      } catch (error) {
+        if (launched !== token) return;
+        set({
+          running: null,
+          error: {
+            code: 'restart-failed',
+            message: error instanceof Error ? error.message : String(error),
+          },
         });
       }
     },
@@ -1053,6 +1376,22 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function waitForTerminalTab(ctx, sessionId, before) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -1124,6 +1463,7 @@ function waitForWritable(view) {
  * @param {string} sessionId active Session.
  * @param {string} command shell command.
  * @param {string} title terminal tab title.
+ * @returns {Promise<{ tabId: string, contentId: string, terminalId: string }>} the opened tab identity.
  */
 async function launchTerminal(ctx, sessionId, command, title) {
   if (!ctx.webTerminals || typeof ctx.webTerminals.view !== 'function') {
@@ -1163,6 +1503,89 @@ async function launchTerminal(ctx, sessionId, command, title) {
   void view.rename(title).catch(() => {});
   await delay(PROMPT_DELAY_MS);
   view.write(`${command}\r`);
+  return { tabId: tab.tabId, contentId: tab.contentId, terminalId: view.id };
+}
+
+/**
+ * Reuse an existing terminal tab: reveal it, interrupt the foreground process,
+ * wait for the shell to settle, then type the command again in that same tab.
+ * @param {any} ctx client context.
+ * @param {{ sessionId: string, tabId: string, contentId: string, terminalId: string, view: any }} target recorded terminal tab.
+ * @param {string} command shell command.
+ * @returns {Promise<void>} after the command was written.
+ */
+async function restartTerminal(ctx, target, command) {
+  if (!target?.view || !ctx.sidebarRight || typeof ctx.sidebarRight.focus !== 'function') {
+    throw new Error('terminal-unavailable');
+  }
+  let view = target.view;
+  if (ctx.webTerminals && typeof ctx.webTerminals.view === 'function' && target.terminalId) {
+    try {
+      view = ctx.webTerminals.view(
+        target.sessionId,
+        target.tabId,
+        target.contentId,
+        target.terminalId,
+      );
+    } catch {
+      // The checked view is still the best available target.
+    }
+  }
+  try {
+    if (
+      typeof ctx.sidebarRight.isExpanded === 'function' &&
+      !ctx.sidebarRight.isExpanded() &&
+      typeof ctx.sidebarRight.toggleExpanded === 'function'
+    ) {
+      ctx.sidebarRight.toggleExpanded();
+    }
+    ctx.sidebarRight.focus(target.tabId);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && error.message ? error.message : 'terminal-unavailable',
+    );
+  }
+
+  if (!view.state.getSnapshot().writable && typeof view.connect === 'function') {
+    // Reattach when another window holds input, or the tab was restored without a stream.
+    view.connect();
+  }
+  await waitForWritable(view);
+  if (!view.state.getSnapshot().writable) throw new Error('terminal-timeout');
+
+  // Ctrl+C reaches the terminal's foreground process group, exactly as if the
+  // user pressed it. A second interrupt catches tools that handle the first one
+  // gracefully before the login shell is ready for the next command.
+  view.write('\u0003');
+  await delay(INTERRUPT_REPEAT_MS);
+  if (view.state.getSnapshot().writable) view.write('\u0003');
+  await waitForInterruptSettle(view);
+
+  if (!view.state.getSnapshot().writable) throw new Error('terminal-timeout');
+  view.write(`${command}\r`);
+}
+
+/**
+ * Give the shell time to handle Ctrl+C before retyping the command. Output
+ * activity restarts the quiet window, bounded so a stuck process cannot block.
+ * @param {any} view terminal view.
+ * @returns {Promise<void>} after the terminal settles or the bound expires.
+ */
+async function waitForInterruptSettle(view) {
+  const started = Date.now();
+  await delay(INTERRUPT_SETTLE_MS);
+  let revision = view.state.getSnapshot().render?.revision;
+  let changedAt = Date.now();
+  while (Date.now() - started < INTERRUPT_TIMEOUT_MS) {
+    await delay(60);
+    const next = view.state.getSnapshot().render?.revision;
+    if (next !== revision) {
+      revision = next;
+      changedAt = Date.now();
+    } else if (Date.now() - changedAt >= INTERRUPT_QUIET_MS) {
+      return;
+    }
+  }
 }
 
 function errorCopy(t, error) {
@@ -1183,6 +1606,16 @@ function errorCopy(t, error) {
       return t('terminalTimeout');
     }
     return message || t('requestFailed');
+  }
+  if (code === 'restart-failed') {
+    const message = error?.message || '';
+    if (message.includes('terminal-unavailable') || message === 'missingTerminal') {
+      return t('restartUnavailable');
+    }
+    if (message.includes('did not become') || message === 'terminal-timeout') {
+      return t('terminalTimeout');
+    }
+    return message || t('restartUnavailable');
   }
   if (code === 'terminal-unavailable') return t('terminalUnavailable');
   if (code === 'terminal-timeout') return t('terminalTimeout');
@@ -1593,6 +2026,15 @@ function RunIcon() {
   );
 }
 
+function RestartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+      <path d="M20 4v7h-7" />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false">
@@ -1667,12 +2109,27 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
   );
   const [active, setActive] = React.useState(0);
   const listRef = React.useRef(null);
+  const confirmRef = React.useRef(null);
+  const confirmWasOpen = React.useRef(false);
   const running = Boolean(state.running);
+  const confirming = state.confirming;
   const ready = state.phase === 'ready';
 
   React.useEffect(() => {
     setActive(0);
   }, [state.query, state.repo]);
+
+  React.useEffect(() => {
+    if (confirming) {
+      confirmWasOpen.current = true;
+      confirmRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    // Keep the marker through the restart itself so a failure returns focus to search.
+    if (!confirmWasOpen.current || running) return;
+    confirmWasOpen.current = false;
+    searchRef.current?.focus({ preventScroll: true });
+  }, [confirming, running, searchRef]);
 
   React.useEffect(() => {
     if (filtered.length === 0) {
@@ -1700,10 +2157,17 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
 
   function onKeyDown(event) {
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+    if (event.key === 'Enter' && event.repeat) {
+      // A held Enter must not carry over from the script list into a restart.
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      if (!running) controller.close();
+      if (running) return;
+      if (confirming) controller.cancelRestart();
+      else controller.close();
       return;
     }
     if (event.key === 'Tab') {
@@ -1726,7 +2190,7 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
       }
       return;
     }
-    if (!ready || filtered.length === 0 || running) return;
+    if (!ready || filtered.length === 0 || running || confirming) return;
     const target = event.target;
     const fromSearch =
       target === searchRef.current ||
@@ -1787,12 +2251,10 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
         onKeyDown={onKeyDown}
       >
         <div className="dsnpm-head">
-          <span className="dsnpm-glyph">
-            <RunIcon />
-          </span>
+          <span className="dsnpm-glyph">{confirming ? <RestartIcon /> : <RunIcon />}</span>
           <div className="dsnpm-heading">
             <h2 className="dsnpm-title" id={titleId}>
-              {t('title')}
+              {confirming ? t('restartTitle') : t('title')}
             </h2>
             <p className="dsnpm-subtitle" id={descriptionId}>
               <span className="dsnpm-subtitleText">{repo ? repoLabel : subtitle}</span>
@@ -1816,113 +2278,174 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
           </button>
         </div>
 
-        <div className="dsnpm-searchWrap">
-          <span className="dsnpm-searchIcon">
-            <SearchIcon />
-          </span>
-          <input
-            ref={searchRef}
-            className="dsnpm-search"
-            type="text"
-            role="combobox"
-            aria-label={t('searchLabel')}
-            aria-autocomplete="list"
-            aria-expanded={ready}
-            aria-controls={listId}
-            aria-activedescendant={activeId}
-            aria-busy={state.phase === 'loading'}
-            placeholder={t('searchPlaceholder')}
-            value={state.query}
-            readOnly={running}
-            aria-disabled={running}
-            spellCheck={false}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            onChange={(event) => controller.setQuery(event.target.value)}
-          />
-        </div>
-
-        {state.error ? (
-          <div className="dsnpm-alert" role="alert">
-            <strong className="dsnpm-alertTitle">
-              {state.phase === 'failed' ? t('errorTitle') : t('terminalErrorTitle')}
-            </strong>
-            {errorCopy(t, state.error)}
-            {state.phase === 'failed' ? (
-              <>
-                <br />
-                <button type="button" className="dsnpm-retry" onClick={() => controller.retry()}>
-                  {t('retry')}
+        {confirming ? (
+          <div className="dsnpm-confirm">
+            <span className="dsnpm-confirmGlyph" aria-hidden="true">
+              <RestartIcon />
+            </span>
+            <div className="dsnpm-confirmBody">
+              <div role="alert">
+                <p className="dsnpm-confirmLead">
+                  {t('restartLead', { name: confirming.script.name })}
+                </p>
+                <p className="dsnpm-confirmDetail">{t('restartDetail')}</p>
+              </div>
+              <code className="dsnpm-confirmCommand">{confirming.command}</code>
+              <div className="dsnpm-confirmActions">
+                <button
+                  type="button"
+                  className="dsnpm-confirmButton"
+                  onClick={() => controller.cancelRestart()}
+                  disabled={running}
+                >
+                  {t('restartCancel')}
                 </button>
-              </>
-            ) : null}
+                <button
+                  ref={confirmRef}
+                  type="button"
+                  className="dsnpm-confirmButton"
+                  data-variant="primary"
+                  onClick={() => void controller.acceptRestart()}
+                  disabled={running}
+                >
+                  {t('restartConfirm')}
+                </button>
+              </div>
+            </div>
           </div>
-        ) : null}
-
-        <div className="dsnpm-listWrap">
-          {state.phase === 'loading' ? (
-            <div className="dsnpm-skeletons" aria-hidden="true">
-              {[0, 1, 2, 3].map((index) => (
-                <div key={index} className="dsnpm-skeleton" />
-              ))}
-            </div>
-          ) : ready && filtered.length === 0 ? (
-            <div className="dsnpm-state">
-              <span className="dsnpm-stateGlyph">
-                <EmptyIcon />
+        ) : (
+          <>
+            <div className="dsnpm-searchWrap">
+              <span className="dsnpm-searchIcon">
+                <SearchIcon />
               </span>
-              {state.repo?.scripts?.length === 0 ? (
-                <span>{t('empty')}</span>
-              ) : (
-                <span>{t('noMatches', { query: state.query.trim() })}</span>
-              )}
+              <input
+                ref={searchRef}
+                className="dsnpm-search"
+                type="text"
+                role="combobox"
+                aria-label={t('searchLabel')}
+                aria-autocomplete="list"
+                aria-expanded={ready}
+                aria-controls={listId}
+                aria-activedescendant={activeId}
+                aria-busy={state.phase === 'loading'}
+                placeholder={t('searchPlaceholder')}
+                value={state.query}
+                readOnly={running}
+                aria-disabled={running}
+                spellCheck={false}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                onChange={(event) => controller.setQuery(event.target.value)}
+              />
             </div>
-          ) : ready ? (
-            <div
-              ref={listRef}
-              className="dsnpm-list"
-              id={listId}
-              role="listbox"
-              aria-label={t('scriptsLabel')}
-              aria-busy={running}
-              tabIndex={-1}
-            >
-              {filtered.map((script, index) => (
-                <ScriptRow
-                  key={script.name}
-                  script={script}
-                  index={index}
-                  active={index === active}
-                  running={running}
-                  onActivate={() => {
-                    if (index !== active) setActive(index);
-                  }}
-                  onRun={run}
-                />
-              ))}
+
+            {state.error ? (
+              <div className="dsnpm-alert" role="alert">
+                <strong className="dsnpm-alertTitle">
+                  {state.phase === 'failed'
+                    ? t('errorTitle')
+                    : state.error.code === 'restart-failed'
+                      ? t('restartErrorTitle')
+                      : t('terminalErrorTitle')}
+                </strong>
+                {errorCopy(t, state.error)}
+                {state.phase === 'failed' ? (
+                  <>
+                    <br />
+                    <button type="button" className="dsnpm-retry" onClick={() => controller.retry()}>
+                      {t('retry')}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="dsnpm-listWrap">
+              {state.phase === 'loading' ? (
+                <div className="dsnpm-skeletons" aria-hidden="true">
+                  {[0, 1, 2, 3].map((index) => (
+                    <div key={index} className="dsnpm-skeleton" />
+                  ))}
+                </div>
+              ) : ready && filtered.length === 0 ? (
+                <div className="dsnpm-state">
+                  <span className="dsnpm-stateGlyph">
+                    <EmptyIcon />
+                  </span>
+                  {state.repo?.scripts?.length === 0 ? (
+                    <span>{t('empty')}</span>
+                  ) : (
+                    <span>{t('noMatches', { query: state.query.trim() })}</span>
+                  )}
+                </div>
+              ) : ready ? (
+                <div
+                  ref={listRef}
+                  className="dsnpm-list"
+                  id={listId}
+                  role="listbox"
+                  aria-label={t('scriptsLabel')}
+                  aria-busy={running}
+                  tabIndex={-1}
+                >
+                  {filtered.map((script, index) => (
+                    <ScriptRow
+                      key={script.name}
+                      script={script}
+                      index={index}
+                      active={index === active}
+                      running={running}
+                      onActivate={() => {
+                        if (index !== active) setActive(index);
+                      }}
+                      onRun={run}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <span className="dsnpm-srOnly" role="status" aria-live="polite">
+                {ready
+                  ? state.query.trim()
+                    ? t(filtered.length === 1 ? 'filterResultOne' : 'filterResults', {
+                        count: filtered.length,
+                        query: state.query.trim(),
+                      })
+                    : t(filtered.length === 1 ? 'allScriptOne' : 'allScripts', {
+                        count: filtered.length,
+                      })
+                  : ''}
+              </span>
             </div>
-          ) : null}
-          <span className="dsnpm-srOnly" role="status" aria-live="polite">
-            {ready
-              ? state.query.trim()
-                ? t(filtered.length === 1 ? 'filterResultOne' : 'filterResults', {
-                    count: filtered.length,
-                    query: state.query.trim(),
-                  })
-                : t(filtered.length === 1 ? 'allScriptOne' : 'allScripts', {
-                    count: filtered.length,
-                  })
-              : ''}
-          </span>
-        </div>
+          </>
+        )}
 
         <div className="dsnpm-footer">
           {running ? (
             <span className="dsnpm-running" role="status">
               <span className="dsnpm-spinner" aria-hidden="true" />
               <span>
-                {t('starting', { name: state.running.name })}
+                {t(
+                  state.running.mode === 'restart'
+                    ? 'restarting'
+                    : state.running.mode === 'check'
+                      ? 'checking'
+                      : 'starting',
+                  { name: state.running.name },
+                )}
+              </span>
+            </span>
+          ) : confirming ? (
+            <span className="dsnpm-hints">
+              <span className="dsnpm-hint">
+                <kbd className="dsnpm-kbd">↵</kbd>
+                {t('restartHint')}
+              </span>
+              <span className="dsnpm-hint">
+                <kbd className="dsnpm-kbd">esc</kbd>
+                {t('restartCancel')}
               </span>
             </span>
           ) : (
@@ -1943,7 +2466,7 @@ function Dialog({ ctx, controller, state, t, dialogRef, searchRef, titleId, desc
             </span>
           )}
           <span className="dsnpm-count">
-            {ready
+            {!confirming && ready
               ? state.query.trim()
                 ? countLabel(t, filtered.length, 'matchesOne', 'matchesMany')
                 : countLabel(t, filtered.length, 'countOne', 'countMany')
@@ -1978,11 +2501,13 @@ function Palette({ ctx, controller }) {
       searchRef.current.select();
     }
     const onKey = (event) => {
-      if (event.key === 'Escape' && !controller.getState().running) {
-        event.preventDefault();
-        event.stopPropagation();
-        controller.close();
-      }
+      if (event.key !== 'Escape') return;
+      const current = controller.getState();
+      // The dialog cancels the restart prompt itself; a running launch cannot be dismissed.
+      if (current.running || current.confirming) return;
+      event.preventDefault();
+      event.stopPropagation();
+      controller.close();
     };
     document.addEventListener('keydown', onKey, true);
     return () => {

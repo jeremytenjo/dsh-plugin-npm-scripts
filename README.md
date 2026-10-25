@@ -1,6 +1,6 @@
 # npm scripts for DeepSeek Harness
 
-Press **Option+A** in any DeepSeek Harness session to open a searchable list of the active repository's `package.json` scripts. Pick one with the keyboard, and it starts in a new Harness terminal tab. The shortcut is configurable from the plugin's own page.
+Press **Option+A** in any DeepSeek Harness session to open a searchable list of the active repository's `package.json` scripts. Pick one with the keyboard, and it starts in a new Harness terminal tab; choosing the same script again offers to restart it in that tab. The shortcut is configurable from the plugin's own page.
 
 <p align="center">
   <picture>
@@ -16,6 +16,7 @@ Press **Option+A** in any DeepSeek Harness session to open a searchable list of 
 - **Search filter** over script names and commands, case-insensitive and ranked so exact and prefix matches come first.
 - **Keyboard first**: `↑` / `↓` navigate, `Home` / `End` jump, `PageUp` / `PageDown` move a page, `Enter` runs, `Esc` closes. The search field uses the ARIA combobox + listbox pattern, so screen readers announce the active script.
 - **Runs in a real Harness terminal**: opens a new terminal tab in the right sidebar, waits for the shell to attach, then types the selected command.
+- **Restarts instead of duplicating**: choosing a script that already has a terminal tab asks first; accepting sends Ctrl+C to stop anything running there and runs the script again in that same tab.
 - **Correct package manager**: reads `packageManager` and lockfiles, supporting `npm`, `pnpm`, `yarn`, and `bun`.
 - **Monorepo aware**: walks up from the session folder to the Git root and uses the nearest `package.json`, then `cd`s into that package before running.
 - **Safe quoting**: script names are quoted for the target shell instead of being pasted as raw shell syntax.
@@ -46,7 +47,8 @@ The plugin is profile-wide: install it once and it is enabled by default in ever
 3. Type to filter the scripts.
 4. Use `↑` / `↓` to highlight a script and press `Enter`. The first result is selected automatically, so `Option+A`, `Enter` runs the first script.
 5. A new terminal tab opens, is renamed to the script name, and receives the command.
-6. To use a different key, open **Plugins → npm scripts → Keyboard shortcut** and record a new binding (see [Configuration](#configuration)).
+6. Choose the same script again while its tab is still open. The palette asks **Restart script?**; **Restart script** sends Ctrl+C to the running process, waits for the shell, and types the command again in that same tab. **Cancel** keeps the process running.
+7. To use a different key, open **Plugins → npm scripts → Keyboard shortcut** and record a new binding (see [Configuration](#configuration)).
 
 The command shown in the palette is what will be typed:
 
@@ -102,8 +104,8 @@ On the Desktop app the binding is registered with the native keyboard service. O
 | `↑` / `↓` | Move the highlight |
 | `Home` / `End` | First / last script |
 | `PageUp` / `PageDown` | Move six rows |
-| `Enter` | Run the highlighted script |
-| `Esc` | Close the palette |
+| `Enter` | Run the highlighted script; in the restart prompt, restart it |
+| `Esc` | Close the palette; in the restart prompt, cancel it |
 | `Tab` / `Shift+Tab` | Cycle focus between search and close |
 
 While the palette is open, Harness's modal layer blocks background shortcuts. The effective binding appears in both **Settings → Keyboard shortcuts** and the plugin page; editing either place updates the same preference. In the Web app, Option+A remains a local fallback until you save a browser-supported combination.
@@ -115,6 +117,8 @@ While the palette is open, Harness's modal layer blocks background shortcuts. Th
 - The browser sends the active Session id. The Host resolves that Session's working directory itself, runs `git rev-parse --show-toplevel`, walks to the nearest `package.json`, parses it, and returns the scripts plus the detected package manager.
 - The browser half builds a quoted command and asks the right sidebar to open a `terminal` tab.
 - It subscribes to the terminal view until it becomes writable, renames the tab to the script name, waits for the first prompt, and writes the command.
+- Each launch is remembered per Session, package, and script in this device's `localStorage`, together with the Host terminal identity. Choosing that script again resolves the saved tab before anything runs.
+- If the saved shell is still running, the palette asks before restarting. Accepting expands and focuses the tab, writes Ctrl+C, waits for the output to settle, and types the command again in the same tab. A closed or exited tab starts a new terminal tab instead.
 
 The Host route never runs project scripts, never accepts a client filesystem path, and refuses non-loopback or cross-origin requests.
 
@@ -132,8 +136,9 @@ Layout while developing:
 
 ```text
 index.js              Host route and repository inspection
-src/client.jsx        Modal, shortcut, terminal launch
+src/client.jsx        Modal, shortcut, terminal launch and restart
 src/filter.js         Search/ranking and highlight slices
+src/launches.js       Script-to-terminal records for the restart prompt
 src/shell.js          Package-manager command construction and quoting
 test/*.test.mjs       Node test runner suites
 cordis.patch.yml      Profile layer entry
@@ -151,6 +156,7 @@ cordis.patch.yml      Profile layer entry
 - Script names and package paths are shell-quoted for the target platform; NUL bytes are rejected.
 - Only scripts from the selected `package.json` are listed, at most 1000, with bounded name and command lengths.
 - Scripts run in the user's terminal with the user's normal permissions, independent of the Agent sandbox, exactly like a terminal command typed by hand.
+- Restarting uses the same terminal input path as typing: it sends Ctrl+C to the foreground process group and then the command, so it never force-kills unrelated processes.
 - The palette follows the nearest `package.json`; it does not scan every workspace package or browse `node_modules`.
 - Terminal recovery and process lifetime follow Harness's terminal controller. Closing the tab ends the process tree according to the terminal provider.
 
