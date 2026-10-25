@@ -711,23 +711,27 @@ const STYLES = `
   cursor: pointer;
   transition: background 100ms ease, border-color 100ms ease;
 }
-.dsnpm-confirmButton:hover {
+.dsnpm-confirmButton:hover:not(:disabled) {
   background: var(--dsw-alias-bg-layer-2, rgba(127, 127, 127, 0.1));
+}
+.dsnpm-confirmButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 .dsnpm-confirmButton[data-variant="primary"] {
   border-color: transparent;
-  background: var(--dsw-alias-brand-primary, #4d6bfe);
-  color: #ffffff;
+  background: var(--dsw-alias-button-primary-fill, #4d6bfe);
+  color: var(--dsw-alias-label-primary-foreground, #ffffff);
 }
-.dsnpm-confirmButton[data-variant="primary"]:hover {
-  background: var(--dsw-alias-brand-primary-hover, #3f5ae0);
+.dsnpm-confirmButton[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover, #3f5ae0);
 }
 .dsnpm-confirmButton:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
   outline-offset: 1px;
 }
 .dsnpm-confirmButton[data-variant="primary"]:focus-visible {
-  outline-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  outline-color: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
   outline-offset: 2px;
 }
 .dsnpm-settings {
